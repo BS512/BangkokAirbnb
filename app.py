@@ -1,72 +1,148 @@
 import streamlit as st
-import altair as alt
 import pandas as pd
+import plotly.express as px
+import plotly.graph_objects as go
 
-# Set page layout to wide for better visualization display
-st.set_page_config(layout="wide")
+# --- PAGE CONFIG & STYLING ---
+st.set_page_config(
+    page_title="Minimalist Analysis Dashboard",
+    page_icon="📊",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
 
-st.title("Global Wealth & Health Metrics")
-st.subheader("Interactive Data Exploration Framework")
+# Custom Minimalist CSS
+st.markdown("""
+    <style>
+    .reportview-container { background: #fdfdfd; }
+    h1, h2, h3 { font-weight: 400; color: #111111; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; }
+    div[data-testid="stMetricValue"] { font-size: 2rem; font-weight: 300; color: #222222; }
+    div[data-testid="stMetricLabel"] { font-size: 0.85rem; color: #666666; text-transform: uppercase; letter-spacing: 0.5px; }
+    hr { margin-top: 1rem; margin-bottom: 1rem; border-color: #eeeeee; }
+    </style>
+""", unsafe_allow_html=True)
 
-# 1. Load the dataset safely
+# --- MOCK DATA CREATION ---
+# Replace this chunk with reading your actual file: pd.read_csv('your_file.csv')
 @st.cache_data
 def load_data():
-    # Make sure 'oecd-wealth-health-2014(1).csv' is in your working app directory
-    df = pd.read_csv("oecd-wealth-health-2014(1).csv")
-    return df
+    data = {
+        'Category': ['Electronics', 'Electronics', 'Apparel', 'Apparel', 'Home', 'Home', 'Office', 'Office'] * 25,
+        'Subcategory': ['Phones', 'Laptops', 'Shirts', 'Shoes', 'Furniture', 'Decor', 'Paper', 'Pens'] * 25,
+        'Region': ['North', 'East', 'South', 'West', 'North', 'East', 'South', 'West'] * 25,
+        'Sales': [1200, 2400, 450, 800, 1500, 300, 150, 80] * 25,
+        'Profit': [150, 400, 90, 120, -50, 45, 30, 15] * 25,
+        'Rating': [4.2, 4.6, 4.0, 4.3, 3.8, 4.1, 4.5, 4.2] * 25
+    }
+    return pd.DataFrame(data)
 
 df = load_data()
 
-# 2. Instantiate Interactive Selection Rules (Altair 4.2 Compatible Syntax)
-# - brush: dragging an interval box on the scatter plot filters the bar chart records
-# - click: clicking bars on the bar chart highlights specific groups on the scatter plot
-brush = alt.selection_interval()
-click = alt.selection_multi(fields=['Region'])
+# --- SIDEBAR INTERACTIVE FILTERS ---
+st.sidebar.markdown("### Filters")
+st.sidebar.markdown("---")
 
-# 3. Build View A: Income vs Life Expectancy Scatter Plot
-scatter_plot = alt.Chart(df).mark_circle().encode(
-    x=alt.X('Income:Q', scale=alt.Scale(type='log'), title='Income per Capita (Log Scale)'),
-    y=alt.Y('LifeExpectancy:Q', scale=alt.Scale(domain=[40, 90]), title='Life Expectancy (Years)'),
-    color=alt.condition(click, 'Region:N', alt.value('#e2e8f0'), title="Region"),
-    size=alt.Size('Population:Q', scale=alt.Scale(range=[20, 600]), legend=None),
-    opacity=alt.condition(brush, alt.value(0.75), alt.value(0.15)),
-    tooltip=['Country:N', 'Region:N', 'Income:Q', 'LifeExpectancy:Q']
-).properties(
-    width=550,
-    height=400,
-    title="Drag an interval box here to filter regional counts"
-).add_selection(
-    brush
+# Filter 1: Dropdown (Multi-select)
+selected_regions = st.sidebar.multiselect(
+    "Select Region(s)",
+    options=df['Region'].unique(),
+    default=df['Region'].unique()
 )
 
-# 4. Build View B: Regional Aggregate Counter Bar Chart
-bar_chart = alt.Chart(df).mark_bar().encode(
-    x=alt.X('count():Q', title='Number of Selected Countries'),
-    y=alt.Y('Region:N', sort='-x', title=None),
-    color=alt.condition(click, 'Region:N', alt.value('#e2e8f0'), legend=None),
-    opacity=alt.condition(brush, alt.value(1.0), alt.value(0.35))
-).properties(
-    width=300,
-    height=400,
-    title="Click bars here to highlight coordinates on left"
-).transform_filter(
-    brush
-).add_selection(
-    click
+# Filter 2: Slider (Continuous variable coordination)
+min_profit, max_profit = float(df['Profit'].min()), float(df['Profit'].max())
+profit_range = st.sidebar.slider(
+    "Profit Range Threshold",
+    min_value=min_profit,
+    max_value=max_profit,
+    value=(min_profit, max_profit)
 )
 
-# 5. Link the layouts together into a single unified workspace view
-interactive_dashboard = alt.hconcat(
-    scatter_plot,
-    bar_chart
-).configure_view(
-    strokeWidth=0
-).configure_title(streamlit run app.py
-    fontSize=14,
-    font='Helvetica Neue',
-    anchor='start',
-    color='#1e293b'
-)
+# --- DATA COORDINATION LOGIC ---
+# Dynamically filtering dataframe based on UI states
+filtered_df = df[
+    (df['Region'].isin(selected_regions)) & 
+    (df['Profit'] >= profit_range[0]) & 
+    (df['Profit'] <= profit_range[1])
+]
 
-# 6. Render chart component in Streamlit
-st.altair_chart(interactive_dashboard, use_container_width=True)streamlit run app.py
+# --- MAIN DASHBOARD LAYOUT ---
+st.title("Performance Summary")
+st.markdown("A coordinated multi-chart exploration interface.")
+st.markdown("---")
+
+# Top Level Metrics (KPIs)
+kpi1, kpi2, kpi3 = st.columns(3)
+with kpi1:
+    st.metric("Total Filtered Sales", f"${filtered_df['Sales'].sum():,}")
+with kpi2:
+    st.metric("Net Profit Margin", f"{(filtered_df['Profit'].sum() / filtered_df['Sales'].sum() * 100):.1f}%" if filtered_df['Sales'].sum() > 0 else "0%")
+with kpi3:
+    st.metric("Average Item Rating", f"{filtered_df['Rating'].mean():.2f} ★")
+
+st.markdown("---")
+
+# Visualization Grid
+col1, col2 = st.columns([1, 1])
+
+with col1:
+    st.markdown("### 1. Sales Distribution by Category")
+    # Visualization 1: Minimal Bar Chart
+    fig_bar = px.bar(
+        filtered_df.groupby('Category', as_index=False)[['Sales', 'Profit']].sum(),
+        x='Category',
+        y='Sales',
+        color_discrete_sequence=['#4A5568'],
+        text_auto='.2s'
+    )
+    fig_bar.update_layout(
+        plot_bgcolor='rgba(0,0,0,0)',
+        paper_bgcolor='rgba(0,0,0,0)',
+        xaxis=dict(showgrid=False, title=""),
+        yaxis=dict(showgrid=True, gridcolor='#f0f0f0', title="Sales ($)"),
+        margin=dict(l=20, r=20, t=10, b=20)
+    )
+    st.plotly_chart(fig_bar, use_container_width=True)
+
+with col2:
+    st.markdown("### 2. Profitability vs. Rating Scatter Matrix")
+    # Visualization 2: Coordinated Scatter Plot
+    fig_scatter = px.scatter(
+        filtered_df,
+        x='Rating',
+        y='Profit',
+        color='Category',
+        color_discrete_sequence=['#3182CE', '#E53E3E', '#319795', '#D69E2E'],
+        hover_data=['Subcategory']
+    )
+    fig_scatter.update_layout(
+        plot_bgcolor='rgba(0,0,0,0)',
+        paper_bgcolor='rgba(0,0,0,0)',
+        xaxis=dict(showgrid=True, gridcolor='#f0f0f0', title="Customer Rating"),
+        yaxis=dict(showgrid=True, gridcolor='#f0f0f0', title="Profit ($)"),
+        margin=dict(l=20, r=20, t=10, b=20),
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+    )
+    st.plotly_chart(fig_scatter, use_container_width=True)
+
+st.markdown("---")
+
+# Full-width Breakdown Chart
+st.markdown("### 3. Regional Segment Contribution Comparison")
+# Visualization 3: Stacked Horizontal Breakdown
+fig_breakdown = px.bar(
+    filtered_df.groupby(['Region', 'Subcategory'], as_index=False)['Sales'].sum(),
+    y='Region',
+    x='Sales',
+    color='Subcategory',
+    orientation='h',
+    color_discrete_sequence=px.colors.qualitative.Muted
+)
+fig_breakdown.update_layout(
+    plot_bgcolor='rgba(0,0,0,0)',
+    paper_bgcolor='rgba(0,0,0,0)',
+    xaxis=dict(showgrid=True, gridcolor='#f0f0f0', title="Aggregated Sales volume"),
+    yaxis=dict(showgrid=False, title=""),
+    margin=dict(l=20, r=20, t=10, b=20)
+)
+st.plotly_chart(fig_breakdown, use_container_width=True)
