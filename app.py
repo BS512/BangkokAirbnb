@@ -136,7 +136,7 @@ fig_breakdown = px.bar(
     x='Sales',
     color='Subcategory',
     orientation='h',
-    color_discrete_sequence=px.colors.qualitative.Muted
+    color_discrete_sequence=px.colors.qualitative.muted
 )
 fig_breakdown.update_layout(
     plot_bgcolor='rgba(0,0,0,0)',
